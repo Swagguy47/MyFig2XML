@@ -1,30 +1,9 @@
 ﻿
-
-using System.Net;
-using System.Net.Security;
-using HtmlAgilityPack;
 using OpenQA.Selenium.Chrome;
-using OpenQA.Selenium;
-using SeleniumUndetectedChromeDriver;
-using ClosedXML;
 using ClosedXML.Excel;
-using DocumentFormat.OpenXml.Spreadsheet;
-using DocumentFormat.OpenXml.Packaging;
-using DocumentFormat.OpenXml.Wordprocessing;
-using DocumentFormat.OpenXml;
-using A = DocumentFormat.OpenXml.Drawing;
-using DW = DocumentFormat.OpenXml.Drawing.Wordprocessing;
-using PIC = DocumentFormat.OpenXml.Drawing.Pictures;
-using Run = DocumentFormat.OpenXml.Wordprocessing.Run;
-using System;
 using MyFig2XML;
-
-ServicePointManager.ServerCertificateValidationCallback += (sender, certificate, chain, errors) =>
-{
-    return true;
-};
-
-
+using Abot2.Core;
+using Abot2.Poco;
 
 //  Check datafiles exist
 string programPath = System.Reflection.Assembly.GetExecutingAssembly().Location;
@@ -51,13 +30,7 @@ options.AddArgument("minimize_me_:3");
 
 //options.PageLoadTimeout = TimeSpan.FromSeconds(3);
 
-UndetectedChromeDriver webDriver = UndetectedChromeDriver.Create(options, null, driverExecutablePath : await new ChromeDriverInstaller().Auto());//  baseDir + "/chromedriver.exe");
-
-using (IWebDriver driver = webDriver)
-{
-    //  start program
-    Init();
-}
+await Init();
 
 Console.WriteLine("\n\n###################################################");
 Console.WriteLine("All done!");
@@ -65,7 +38,7 @@ Console.WriteLine("Prices exported to: " + programPath + "\\Data.xlsl");
 Console.WriteLine("###################################################\n\n");
 Console.ReadLine();
 
-void Init()
+async Task Init()
 {
     Console.WriteLine("____________________________________");
     Console.WriteLine("Enter MyFigureCollection username:");
@@ -175,7 +148,7 @@ void Init()
     File.WriteAllText(programPath + "/last.txt", url);
 
     //  get conversion rate
-    var rates = FetchWebData("https://v6.exchangerate-api.com/v6/f12b66341ce2c43b744559c8/latest/USD");
+    var rates = await FetchWebData("https://v6.exchangerate-api.com/v6/f12b66341ce2c43b744559c8/latest/USD");
 
     conversionRate = float.Parse(rates.Split("\"JPY\":")[1].Split(",")[0]);
 
@@ -183,10 +156,10 @@ void Init()
 
     //  begin
     if (url.ToLower().Contains("myfigurecollection.net"))
-        MainProcess(url);
+        await MainProcess(url);
 }
 
-void MainProcess(string url)
+async Task MainProcess(string url)
 {
     using (var workbook = new XLWorkbook())
     {
@@ -226,7 +199,7 @@ void MainProcess(string url)
             }
 
             //  Get collection webpage
-            string data = FetchWebData(url + p);
+            string data = await FetchWebData(url + p);
 
             //Console.WriteLine($"{data}");
 
@@ -256,7 +229,8 @@ void MainProcess(string url)
 
                 var itemPage = string.Empty;
                 if(!end)
-                    itemPage = FetchWebData("https://myfigurecollection.net" + link);
+                    itemPage = await FetchWebData("https://myfigurecollection.net" + link);
+                else { solaris = "???"; ninin = "???"; }
 
                 var sellers = itemPage.Split("icon icon-diamond");
 
@@ -301,7 +275,7 @@ void MainProcess(string url)
 
                             sortedLinks.Add(finalLink);
 
-                            var partnerData = FetchWebData(finalLink);
+                            var partnerData = await FetchWebData(finalLink);
 
                             try
                             {
@@ -334,7 +308,7 @@ void MainProcess(string url)
                 worksheet.Cell(row, 1).Value = name;
                 worksheet.Cell(row, 1).SetHyperlink(new(@"https://myfigurecollection.net" + link));
                 worksheet.Cell(row, 2).Value = ninin;
-                if(ninin != "---")
+                if(ninin != "---" & ninin != "???")
                     worksheet.Cell(row, 2).SetHyperlink(new(@nLink));
                 worksheet.Cell(row, 3).Value = solaris;
                 if(solaris != "---")
@@ -401,7 +375,26 @@ string NinNinPrice(string data)
     return isolatedData;
 }
 
-string FetchWebData(string link)
+static async Task<string> FetchWebData(string link)
+{
+    Console.WriteLine("Fetching: " + link);
+
+    var crawler = new CrawlConfiguration() { IsRespectMetaRobotsNoFollowEnabled = false };
+    var extractor = new WebContentExtractor();
+
+    var pageRequester = new PageRequester(crawler, extractor);
+
+    var crawledPage = await pageRequester.MakeRequestAsync(new Uri(link));
+
+    Console.WriteLine("=================");
+    Console.WriteLine(crawledPage.Content.Text);
+    Console.WriteLine("=================");
+    Console.ReadLine();
+
+    return crawledPage.Content.Text;
+}
+
+/*string OldFetchWebData(string link)
 {
     Console.WriteLine("Fetching: " + link);
 
@@ -433,15 +426,4 @@ string FetchWebData(string link)
         Console.ReadLine();
         return "";
     }
-}
-
-void DisplayIcon(string link)
-{
-    using (WebClient client = new WebClient())
-    {
-        var iconPath = programPath + @"\tempicon.png";
-        client.DownloadFile(new Uri(link), iconPath);
-
-        ConsoleGraphics.Render(iconPath);
-    }
-}
+}*/
